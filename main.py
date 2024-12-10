@@ -16,7 +16,7 @@ def detect_language(text):
     except:
         return "unknown"  # Повертаємо "unknown" у разі помилки
 
-def translate_text(text, source_lang, target_lang):
+def translate_text(text, source_lang, target_lang, model_cache):
     
     if source_lang == 'uk':
         model_name = 'Helsinki-NLP/opus-mt-uk-en'  # Вибираємо модель для перекладу з української на англійську
@@ -25,8 +25,14 @@ def translate_text(text, source_lang, target_lang):
     else:
         raise ValueError("Непідтримувана мова")  # Генеруємо виняток, якщо мова не підтримується
 
-    tokenizer = MarianTokenizer.from_pretrained(model_name)  # Завантажуємо токенізатор
-    model = MarianMTModel.from_pretrained(model_name)  # Завантажуємо модель
+    # Перевіряємо, чи модель вже є в кеші
+    if model_name in model_cache:
+        tokenizer, model = model_cache[model_name]  # Якщо є, використовуємо її
+    else:
+        # Якщо моделі немає в кеші, завантажуємо її та додаємо до кешу
+        tokenizer = MarianTokenizer.from_pretrained(model_name)  # Завантажуємо токенізатор
+        model = MarianMTModel.from_pretrained(model_name)  # Завантажуємо модель
+        model_cache[model_name] = (tokenizer, model)  # Додаємо модель та токенізатор до кешу
 
     batch = tokenizer([text], return_tensors="pt", padding=True)  # Токенізуємо текст та готуємо його для моделі
     generated_ids = model.generate(**batch)  # Генеруємо переклад
@@ -36,16 +42,24 @@ def translate_text(text, source_lang, target_lang):
 if __name__ == '__main__':  # Перевіряємо, чи скрипт запущено як основний
     freeze_support()  # Викликаємо freeze_support() для підтримки заморозки
 
+    model_cache = {}  # Створюємо словник для кешування моделей
+
     while True:  # Запускаємо нескінченний цикл
         text = input("Введіть текст для перекладу: ")  # Отримуємо текст від користувача
         
         source_lang = detect_language(text)  # Визначаємо мову оригіналу
         print("Визначена мова оригіналу:", source_lang)  # Виводимо визначену мову
 
+        # Додаємо ручне виправлення мови
+        if source_lang not in ('uk', 'en'):
+            print("Мова не розпізнана. Введіть мову оригіналу вручну (uk або en):")
+            source_lang = input().lower()  # Отримуємо мову від користувача
+
         if source_lang in ('uk', 'en'):  # Перевіряємо, чи підтримується мова
             target_lang = 'en' if source_lang == 'uk' else 'uk'  # Визначаємо мову перекладу
             try:
-                translated_text = translate_text(text, source_lang, target_lang)  # Перекладаємо текст
+                # Передаємо model_cache в функцію translate_text()
+                translated_text = translate_text(text, source_lang, target_lang, model_cache)  # Перекладаємо текст
                 print("Переклад:", translated_text)  # Виводимо переклад
             except ValueError as e:  # Обробляємо виняток ValueError
                 print(e)  # Виводимо повідомлення про помилку
