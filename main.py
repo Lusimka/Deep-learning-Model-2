@@ -1,57 +1,53 @@
-import os
-# Встановлюємо змінні оточення для обмеження кількості потоків та 
-# відключення паралелізму токенізатора для уникнення конфліктів.
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+import os  # Імпортуємо модуль для роботи з операційною системою
+os.environ["OMP_NUM_THREADS"] = "1"  # Встановлюємо кількість потоків для OpenMP (для оптимізації)
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Вимкнути паралелізм токенізатора
 
-from multiprocessing import freeze_support  # Для сумісності з Windows
-import transformers  # Бібліотека для роботи з моделями NLP
-from transformers import MarianMTModel, MarianTokenizer  # Модель та токенізатор для машинного перекладу
+from multiprocessing import freeze_support  # Імпортуємо функцію для підтримки заморозки коду
+import transformers  # Імпортуємо бібліотеку transformers
+from transformers import MarianMTModel, MarianTokenizer  # Імпортуємо класи для моделі та токенізатора MarianMT
 
-import torch  # Бібліотека для роботи з тензорами
+import torch  # Імпортуємо бібліотеку PyTorch
+from langdetect import detect  # Імпортуємо функцію для розпізнавання мови
+
+def detect_language(text):
+    
+    try:
+        return detect(text)  # Використовуємо langdetect для визначення мови
+    except:
+        return "unknown"  # Повертаємо "unknown" у разі помилки
 
 def translate_text(text, source_lang, target_lang):
-    """
-    Перекладає текст з однієї мови на іншу за допомогою моделі MarianMT.
-
-    Args:
-        text: Текст для перекладу.
-        source_lang: Код мови оригіналу ('uk' або 'en').
-        target_lang: Код мови перекладу ('en' або 'uk').
-
-    Returns:
-        Перекладений текст.
-    """
-    # Вибір моделі перекладу в залежності від мовної пари
+    
     if source_lang == 'uk':
-        model_name = 'Helsinki-NLP/opus-mt-uk-en'  # Модель для перекладу з української на англійську
+        model_name = 'Helsinki-NLP/opus-mt-uk-en'  # Вибираємо модель для перекладу з української на англійську
     elif source_lang == 'en':
-        model_name = 'Helsinki-NLP/opus-mt-en-uk'  # Модель для перекладу з англійської на українську
+        model_name = 'Helsinki-NLP/opus-mt-en-uk'  # Вибираємо модель для перекладу з англійської на українську
     else:
-        raise ValueError("Непідтримувана мова")  # Помилка, якщо мова не підтримується
+        raise ValueError("Непідтримувана мова")  # Генеруємо виняток, якщо мова не підтримується
 
-    # Завантаження токенізатора та моделі
-    tokenizer = MarianTokenizer.from_pretrained(model_name)  
-    model = MarianMTModel.from_pretrained(model_name)
+    tokenizer = MarianTokenizer.from_pretrained(model_name)  # Завантажуємо токенізатор
+    model = MarianMTModel.from_pretrained(model_name)  # Завантажуємо модель
 
-    # Токенізація тексту та перетворення в тензор
-    batch = tokenizer([text], return_tensors="pt", padding=True)  
-    # Генерація перекладу
-    generated_ids = model.generate(**batch)  
-    # Декодування результату
-    translated = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]  
-    return translated
+    batch = tokenizer([text], return_tensors="pt", padding=True)  # Токенізуємо текст та готуємо його для моделі
+    generated_ids = model.generate(**batch)  # Генеруємо переклад
+    translated = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]  # Декодуємо переклад
+    return translated  # Повертаємо перекладений текст
 
-if __name__ == '__main__':
-    freeze_support()  # Для сумісності з Windows
+if __name__ == '__main__':  # Перевіряємо, чи скрипт запущено як основний
+    freeze_support()  # Викликаємо freeze_support() для підтримки заморозки
 
-    while True:  # Нескінченний цикл для перекладу тексту
-        text = input("Введіть текст для перекладу: ")
-        source_lang = input("Введіть мову оригіналу (uk або en): ")
-        target_lang = input("Введіть мову перекладу (en або uk): ")
+    while True:  # Запускаємо нескінченний цикл
+        text = input("Введіть текст для перекладу: ")  # Отримуємо текст від користувача
+        
+        source_lang = detect_language(text)  # Визначаємо мову оригіналу
+        print("Визначена мова оригіналу:", source_lang)  # Виводимо визначену мову
 
-        try:
-            translated_text = translate_text(text, source_lang, target_lang)  # Виклик функції перекладу
-            print("Переклад:", translated_text)  # Виведення перекладеного тексту
-        except ValueError as e:  # Обробка помилки непідтримуваної мови
-            print(e)
+        if source_lang in ('uk', 'en'):  # Перевіряємо, чи підтримується мова
+            target_lang = 'en' if source_lang == 'uk' else 'uk'  # Визначаємо мову перекладу
+            try:
+                translated_text = translate_text(text, source_lang, target_lang)  # Перекладаємо текст
+                print("Переклад:", translated_text)  # Виводимо переклад
+            except ValueError as e:  # Обробляємо виняток ValueError
+                print(e)  # Виводимо повідомлення про помилку
+        else:
+            print("Не вдалося розпізнати мову або мова не підтримується.")  # Виводимо повідомлення про помилку
